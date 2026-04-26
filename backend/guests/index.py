@@ -1,10 +1,51 @@
 import json
 import os
-import psycopg2  # v2
+import urllib.request
+import urllib.parse
+import psycopg2  # v3
+
+
+# ID страницы ВКонтакте sonechka_nss — отправляем сообщение на эту страницу
+VK_SCREEN_NAME = "sonechka_nss"
+
+
+def send_vk_message(text: str):
+    """Отправка сообщения в ВКонтакте."""
+    token = os.environ.get("VK_ACCESS_TOKEN", "")
+    if not token:
+        return
+
+    # Сначала получаем user_id по screen_name
+    resolve_url = "https://api.vk.com/method/utils.resolveScreenName?" + urllib.parse.urlencode({
+        "screen_name": VK_SCREEN_NAME,
+        "access_token": token,
+        "v": "5.199",
+    })
+    try:
+        with urllib.request.urlopen(resolve_url, timeout=5) as r:
+            data = json.loads(r.read())
+        obj = data.get("response", {})
+        peer_id = obj.get("object_id")
+        if not peer_id:
+            return
+
+        # Отправляем сообщение
+        msg_url = "https://api.vk.com/method/messages.send"
+        params = urllib.parse.urlencode({
+            "user_id": peer_id,
+            "message": text,
+            "random_id": 0,
+            "access_token": token,
+            "v": "5.199",
+        }).encode()
+        req = urllib.request.Request(msg_url, data=params, method="POST")
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # не блокируем основной ответ если ВК недоступен
 
 
 def handler(event: dict, context) -> dict:
-    """Сохранение ответа гостя и получение списка гостей."""
+    """Сохранение ответа гостя и отправка уведомления в ВКонтакте."""
 
     cors = {
         "Access-Control-Allow-Origin": "*",
@@ -40,6 +81,13 @@ def handler(event: dict, context) -> dict:
             row = cur.fetchone()
             conn.commit()
             cur.close()
+
+            # Уведомление в ВК
+            emoji = "✅" if attending == "yes" else "❌"
+            status = "придёт на свадьбу" if attending == "yes" else "не сможет прийти"
+            vk_text = f"💌 Новый ответ гостя!\n\n{emoji} {name} — {status}"
+            send_vk_message(vk_text)
+
             return {
                 "statusCode": 200,
                 "headers": cors,
