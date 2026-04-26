@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "name": "POST guest - yes",
+      "method": "POST",
+      "path": "/",
+      "body": {"name": "Тест Гость", "attending": "yes"},
+      "expectedStatus": 200,
+      "expectedBody": {"ok": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET guests list",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"guests": []},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

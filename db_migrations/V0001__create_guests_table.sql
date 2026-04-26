@@ -1,0 +1,6 @@
+CREATE TABLE guests (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  attending VARCHAR(10) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);

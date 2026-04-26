@@ -1,7 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const WEDDING_DATE = new Date("2026-07-22T11:20:00");
 const CHERUB_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/files/709f0a29-c676-48f6-9500-3b3fa2f73350.jpg";
+const AURORA_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/bucket/261e3444-b41a-41a1-827a-5fc5d07a202f.jpeg";
+const GUESTS_API = "https://functions.poehali.dev/9935c4a5-21a7-49c9-8947-4e964e307a6c";
+// Прямая ссылка на трек Golden Brown (Slowed) GhalyProd
+const TRACK_URL = "https://music.yandex.ru/search?text=GhalyProd+Golden+Brown+Slowed";
 
 function useCountdown(target: Date) {
   const [diff, setDiff] = useState(target.getTime() - Date.now());
@@ -19,12 +23,25 @@ function useCountdown(target: Date) {
 }
 
 function MusicBar() {
-  const [open, setOpen] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  const toggle = () => {
+    if (!audioRef.current) return;
+    if (playing) {
+      audioRef.current.pause();
+      setPlaying(false);
+    } else {
+      audioRef.current.play().catch(() => {});
+      setPlaying(true);
+    }
+  };
 
   return (
     <div style={{ background: "#6b1429", padding: "16px 20px", textAlign: "center" }}>
+      {/* Скрытый аудио-плеер через iframe Яндекс.Музыки */}
       <button
-        onClick={() => setOpen(v => !v)}
+        onClick={toggle}
         style={{
           display: "inline-flex", alignItems: "center", gap: "10px",
           background: "#f5ede0", border: "none", borderRadius: "100px",
@@ -37,29 +54,45 @@ function MusicBar() {
         onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.04)")}
         onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
       >
-        <span style={{ fontSize: "15px" }}>{open ? "⏸" : "▷"}</span>
+        <span style={{ fontSize: "15px" }}>{playing ? "⏸" : "▷"}</span>
         <span>♪</span>
-        <span>{open ? "Пауза" : "Включить музыку"}</span>
+        <span>{playing ? "Пауза" : "Включить музыку"}</span>
       </button>
+
       <p style={{
         fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
-        color: "rgba(245,237,224,0.6)", fontSize: "13px", margin: "8px 0 0",
+        color: "rgba(245,237,224,0.6)", fontSize: "13px", margin: "8px 0 4px",
       }}>
-        {open ? "Golden Brown (Slowed) — GhalyProd" : "Нажмите, чтобы включить музыку"}
+        {playing ? "Golden Brown (Slowed) — GhalyProd" : "Нажмите, чтобы включить музыку"}
       </p>
-      {open && (
-        <div style={{ marginTop: "14px", display: "flex", justifyContent: "center", animation: "fadeIn 0.4s ease" }}>
-          <iframe
-            src="https://music.yandex.ru/iframe/#search/GhalyProd%20Golden%20Brown%20Slowed"
-            width="290"
-            height="90"
-            frameBorder="0"
-            allow="autoplay"
-            style={{ borderRadius: "14px", border: "1px solid rgba(245,237,224,0.15)" }}
-            title="Яндекс.Музыка"
-          />
-        </div>
-      )}
+
+      <a
+        href={TRACK_URL}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          fontFamily: "'Montserrat', sans-serif",
+          fontSize: "11px",
+          color: "rgba(245,237,224,0.4)",
+          textDecoration: "underline",
+          letterSpacing: "0.05em",
+        }}
+      >
+        Открыть трек в Яндекс.Музыке ↗
+      </a>
+
+      {/* Встроенный плеер Яндекс.Музыка */}
+      <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
+        <iframe
+          src="https://music.yandex.ru/iframe/#search/GhalyProd%20Golden%20Brown%20Slowed/tracks"
+          width="290"
+          height="80"
+          frameBorder="0"
+          allow="autoplay"
+          style={{ borderRadius: "12px", border: "1px solid rgba(245,237,224,0.15)" }}
+          title="Яндекс.Музыка"
+        />
+      </div>
     </div>
   );
 }
@@ -102,6 +135,30 @@ export default function Index() {
   const [guestName, setGuestName] = useState("");
   const [attending, setAttending] = useState<"yes" | "no" | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const submitGuest = async () => {
+    if (!guestName.trim() || !attending) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(GUESTS_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: guestName.trim(), attending }),
+      });
+      if (res.ok) {
+        setSubmitted(true);
+      } else {
+        setError("Ошибка. Попробуйте ещё раз.");
+      }
+    } catch {
+      setError("Ошибка соединения. Попробуйте ещё раз.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -187,21 +244,22 @@ export default function Index() {
         {/* LOCATION */}
         <Card>
           <SectionTitle>Локация</SectionTitle>
-          <div style={{ border: "1px solid rgba(107,20,41,0.15)", borderRadius: "12px", padding: "20px", textAlign: "center" }}>
-            <div style={{ fontSize: "22px", marginBottom: "14px" }}>🌸🌺🌸</div>
-            <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18px", color: "#3d0a17", fontWeight: 600, margin: "0 0 4px" }}>
-              г/к «Аврора», 1 этаж
-            </p>
-            <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85", marginBottom: "16px" }}>
-              ул. Поворотникова, д. 6
-            </p>
-            <div style={{ borderRadius: "10px", overflow: "hidden", height: "160px", background: "linear-gradient(135deg, #e8d5b7, #c9b8a8)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "38px", marginBottom: "8px" }}>🏛️</div>
-                <p style={{ fontFamily: "'Cormorant Garamond', serif", color: "#6b1429", fontSize: "15px" }}>Аврора Комплекс</p>
-              </div>
+          <div style={{ border: "1px solid rgba(107,20,41,0.15)", borderRadius: "12px", overflow: "hidden" }}>
+            <div style={{ padding: "20px", textAlign: "center" }}>
+              <div style={{ fontSize: "22px", marginBottom: "14px" }}>🌸🌺🌸</div>
+              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18px", color: "#3d0a17", fontWeight: 600, margin: "0 0 4px" }}>
+                г/к «Аврора», 1 этаж
+              </p>
+              <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85", marginBottom: "16px" }}>
+                ул. Поворотникова, д. 6
+              </p>
             </div>
-            <div style={{ fontSize: "22px", marginTop: "14px" }}>🌺🌸🌺</div>
+            <img
+              src={AURORA_IMG}
+              alt="Аврора Комплекс"
+              style={{ width: "100%", display: "block", height: "200px", objectFit: "cover" }}
+            />
+            <div style={{ padding: "14px", textAlign: "center", fontSize: "22px" }}>🌺🌸🌺</div>
           </div>
         </Card>
 
@@ -257,7 +315,7 @@ export default function Index() {
             <div style={{ textAlign: "center", padding: "20px 0" }}>
               <div style={{ fontSize: "48px", marginBottom: "16px" }}>💌</div>
               <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "20px", color: "#6b1429" }}>
-                Спасибо! Мы вас ждём 🤍
+                {attending === "yes" ? "Спасибо! Мы вас ждём 🤍" : "Жаль, что не сможете. Будем скучать 🌸"}
               </p>
             </div>
           ) : (
@@ -291,18 +349,24 @@ export default function Index() {
                   </label>
                 ))}
               </div>
+              {error && (
+                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#c0392b", textAlign: "center" }}>
+                  {error}
+                </p>
+              )}
               <button
-                onClick={() => { if (guestName && attending) setSubmitted(true); }}
+                onClick={submitGuest}
+                disabled={!guestName.trim() || !attending || loading}
                 style={{
                   width: "100%", padding: "16px", border: "none", borderRadius: "10px",
                   fontFamily: "'Montserrat', sans-serif", fontWeight: 500, fontSize: "13px",
                   letterSpacing: "0.15em", textTransform: "uppercase", color: "#f5ede0",
-                  background: guestName && attending ? "#6b1429" : "rgba(107,20,41,0.3)",
-                  cursor: guestName && attending ? "pointer" : "default",
+                  background: guestName.trim() && attending && !loading ? "#6b1429" : "rgba(107,20,41,0.3)",
+                  cursor: guestName.trim() && attending && !loading ? "pointer" : "default",
                   transition: "background 0.3s",
                 }}
               >
-                Отправить ответ
+                {loading ? "Отправляем…" : "Отправить ответ"}
               </button>
             </div>
           )}
