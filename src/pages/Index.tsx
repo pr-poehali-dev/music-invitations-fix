@@ -5,8 +5,9 @@ const CHERUB_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-896
 const AURORA_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/bucket/261e3444-b41a-41a1-827a-5fc5d07a202f.jpeg";
 const GUESTS_API = "https://functions.poehali.dev/9935c4a5-21a7-49c9-8947-4e964e307a6c";
 
-// Трек Golden Brown (Slowed) — GhalyProd с открытого источника
-const TRACK_SRC = "https://skysound7.com/music/GhalyProd-Golden-Brown-Slowed.mp3";
+// Трек Golden Brown (Slowed) — GhalyProd
+// Используем публичный CDN через proxy для обхода CORS
+const TRACK_SRC = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/files/golden-brown-slowed.mp3";
 
 function useCountdown(target: Date) {
   const [diff, setDiff] = useState(target.getTime() - Date.now());
@@ -29,20 +30,25 @@ function MusicBar() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [canPlay, setCanPlay] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const audio = new Audio();
+    audio.crossOrigin = "anonymous";
     audio.src = TRACK_SRC;
     audio.loop = true;
-    audio.preload = "metadata";
+    audio.preload = "auto";
     audioRef.current = audio;
 
+    audio.addEventListener("canplaythrough", () => setCanPlay(true));
     audio.addEventListener("loadedmetadata", () => setDuration(audio.duration));
     audio.addEventListener("timeupdate", () => {
       setCurrentTime(audio.currentTime);
       setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0);
     });
     audio.addEventListener("ended", () => setPlaying(false));
+    audio.addEventListener("error", () => setLoadError(true));
 
     return () => { audio.pause(); audio.src = ""; };
   }, []);
@@ -53,8 +59,12 @@ function MusicBar() {
       audioRef.current.pause();
       setPlaying(false);
     } else {
-      audioRef.current.play().catch(() => {});
-      setPlaying(true);
+      const promise = audioRef.current.play();
+      if (promise) {
+        promise.then(() => setPlaying(true)).catch(() => setLoadError(true));
+      } else {
+        setPlaying(true);
+      }
     }
   };
 
@@ -73,52 +83,62 @@ function MusicBar() {
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
+  const btnLabel = loadError
+    ? "Трек недоступен"
+    : !canPlay
+    ? "Загружается…"
+    : playing
+    ? "Пауза"
+    : "Включить музыку";
+
+  const btnIcon = loadError ? "✕" : !canPlay ? "⏳" : playing ? "⏸" : "▷";
+
   return (
     <div style={{ background: "#6b1429", padding: "18px 20px 20px", textAlign: "center" }}>
-      {/* Кнопка */}
       <button
-        onClick={toggle}
+        onClick={!loadError ? toggle : undefined}
+        disabled={!canPlay && !loadError}
         style={{
           display: "inline-flex", alignItems: "center", gap: "10px",
-          background: "#f5ede0", border: "none", borderRadius: "100px",
-          padding: "14px 36px", cursor: "pointer",
+          background: loadError ? "rgba(245,237,224,0.4)" : "#f5ede0",
+          border: "none", borderRadius: "100px",
+          padding: "14px 36px", cursor: canPlay && !loadError ? "pointer" : "default",
           fontFamily: "'Montserrat', sans-serif", fontWeight: 500,
           fontSize: "13px", letterSpacing: "0.15em", textTransform: "uppercase",
           color: "#6b1429", boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
-          transition: "transform 0.2s, box-shadow 0.2s",
+          transition: "transform 0.2s",
         }}
-        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.04)"; }}
+        onMouseEnter={e => { if (canPlay) e.currentTarget.style.transform = "scale(1.04)"; }}
         onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
       >
-        <span style={{ fontSize: "15px" }}>{playing ? "⏸" : "▷"}</span>
+        <span style={{ fontSize: "15px" }}>{btnIcon}</span>
         <span>♪</span>
-        <span>{playing ? "Пауза" : "Включить музыку"}</span>
+        <span>{btnLabel}</span>
       </button>
 
-      {/* Название трека */}
       <p style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "rgba(245,237,224,0.65)", fontSize: "13px", margin: "10px 0 0" }}>
         Golden Brown (Slowed) — GhalyProd
       </p>
 
-      {/* Прогресс-бар */}
-      <div style={{ marginTop: "14px", padding: "0 12px" }}>
-        <div
-          onClick={seek}
-          style={{ height: "3px", background: "rgba(245,237,224,0.15)", borderRadius: "2px", cursor: "pointer", position: "relative", overflow: "hidden" }}
-        >
-          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${progress}%`, background: "#f5ede0", borderRadius: "2px", transition: "width 0.3s linear" }} />
+      {canPlay && (
+        <div style={{ marginTop: "14px", padding: "0 12px" }}>
+          <div
+            onClick={seek}
+            style={{ height: "4px", background: "rgba(245,237,224,0.15)", borderRadius: "2px", cursor: "pointer", position: "relative", overflow: "hidden" }}
+          >
+            <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${progress}%`, background: "linear-gradient(90deg, #e8d5a3, #f5ede0)", borderRadius: "2px", transition: "width 0.3s linear" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
+            <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(currentTime)}</span>
+            <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(duration)}</span>
+          </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
-          <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(currentTime)}</span>
-          <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(duration)}</span>
-        </div>
-      </div>
+      )}
 
-      {/* Пульсирующие точки когда играет */}
       {playing && (
-        <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "10px" }}>
-          {[0, 0.2, 0.4].map(d => (
-            <div key={d} style={{ width: "4px", height: "4px", borderRadius: "50%", background: "rgba(245,237,224,0.5)", animation: `pulse 1.2s ease-in-out ${d}s infinite` }} />
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: "4px", marginTop: "12px", height: "16px" }}>
+          {[1, 1.4, 0.8, 1.6, 1].map((h, i) => (
+            <div key={i} style={{ width: "3px", borderRadius: "2px", background: "rgba(245,237,224,0.5)", animation: `barPulse 0.8s ease-in-out ${i * 0.12}s infinite alternate`, height: `${h * 8}px` }} />
           ))}
         </div>
       )}
@@ -195,6 +215,7 @@ export default function Index() {
         @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500&display=swap');
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.6); opacity: 1; } }
+        @keyframes barPulse { from { transform: scaleY(0.4); opacity: 0.4; } to { transform: scaleY(1.5); opacity: 1; } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #6b1429 !important; }
       `}</style>
