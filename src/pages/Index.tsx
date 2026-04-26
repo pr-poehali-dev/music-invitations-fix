@@ -4,8 +4,9 @@ const WEDDING_DATE = new Date("2026-07-22T11:20:00");
 const CHERUB_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/files/709f0a29-c676-48f6-9500-3b3fa2f73350.jpg";
 const AURORA_IMG = "https://cdn.poehali.dev/projects/fc57372d-59e0-429a-8d8b-89671d7994c5/bucket/261e3444-b41a-41a1-827a-5fc5d07a202f.jpeg";
 const GUESTS_API = "https://functions.poehali.dev/9935c4a5-21a7-49c9-8947-4e964e307a6c";
-// Прямая ссылка на трек Golden Brown (Slowed) GhalyProd
-const TRACK_URL = "https://music.yandex.ru/search?text=GhalyProd+Golden+Brown+Slowed";
+
+// Трек Golden Brown (Slowed) — GhalyProd с открытого источника
+const TRACK_SRC = "https://skysound7.com/music/GhalyProd-Golden-Brown-Slowed.mp3";
 
 function useCountdown(target: Date) {
   const [diff, setDiff] = useState(target.getTime() - Date.now());
@@ -25,6 +26,26 @@ function useCountdown(target: Date) {
 function MusicBar() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const audio = new Audio();
+    audio.src = TRACK_SRC;
+    audio.loop = true;
+    audio.preload = "metadata";
+    audioRef.current = audio;
+
+    audio.addEventListener("loadedmetadata", () => setDuration(audio.duration));
+    audio.addEventListener("timeupdate", () => {
+      setCurrentTime(audio.currentTime);
+      setProgress(audio.duration ? (audio.currentTime / audio.duration) * 100 : 0);
+    });
+    audio.addEventListener("ended", () => setPlaying(false));
+
+    return () => { audio.pause(); audio.src = ""; };
+  }, []);
 
   const toggle = () => {
     if (!audioRef.current) return;
@@ -37,9 +58,24 @@ function MusicBar() {
     }
   };
 
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!audioRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const pct = x / rect.width;
+    audioRef.current.currentTime = pct * duration;
+  };
+
+  const fmt = (s: number) => {
+    if (!s || isNaN(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <div style={{ background: "#6b1429", padding: "16px 20px", textAlign: "center" }}>
-      {/* Скрытый аудио-плеер через iframe Яндекс.Музыки */}
+    <div style={{ background: "#6b1429", padding: "18px 20px 20px", textAlign: "center" }}>
+      {/* Кнопка */}
       <button
         onClick={toggle}
         style={{
@@ -48,51 +84,44 @@ function MusicBar() {
           padding: "14px 36px", cursor: "pointer",
           fontFamily: "'Montserrat', sans-serif", fontWeight: 500,
           fontSize: "13px", letterSpacing: "0.15em", textTransform: "uppercase",
-          color: "#6b1429", boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
-          transition: "transform 0.2s",
+          color: "#6b1429", boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
+          transition: "transform 0.2s, box-shadow 0.2s",
         }}
-        onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.04)")}
-        onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.04)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
       >
         <span style={{ fontSize: "15px" }}>{playing ? "⏸" : "▷"}</span>
         <span>♪</span>
         <span>{playing ? "Пауза" : "Включить музыку"}</span>
       </button>
 
-      <p style={{
-        fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic",
-        color: "rgba(245,237,224,0.6)", fontSize: "13px", margin: "8px 0 4px",
-      }}>
-        {playing ? "Golden Brown (Slowed) — GhalyProd" : "Нажмите, чтобы включить музыку"}
+      {/* Название трека */}
+      <p style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "rgba(245,237,224,0.65)", fontSize: "13px", margin: "10px 0 0" }}>
+        Golden Brown (Slowed) — GhalyProd
       </p>
 
-      <a
-        href={TRACK_URL}
-        target="_blank"
-        rel="noreferrer"
-        style={{
-          fontFamily: "'Montserrat', sans-serif",
-          fontSize: "11px",
-          color: "rgba(245,237,224,0.4)",
-          textDecoration: "underline",
-          letterSpacing: "0.05em",
-        }}
-      >
-        Открыть трек в Яндекс.Музыке ↗
-      </a>
-
-      {/* Встроенный плеер Яндекс.Музыка */}
-      <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
-        <iframe
-          src="https://music.yandex.ru/iframe/#search/GhalyProd%20Golden%20Brown%20Slowed/tracks"
-          width="290"
-          height="80"
-          frameBorder="0"
-          allow="autoplay"
-          style={{ borderRadius: "12px", border: "1px solid rgba(245,237,224,0.15)" }}
-          title="Яндекс.Музыка"
-        />
+      {/* Прогресс-бар */}
+      <div style={{ marginTop: "14px", padding: "0 12px" }}>
+        <div
+          onClick={seek}
+          style={{ height: "3px", background: "rgba(245,237,224,0.15)", borderRadius: "2px", cursor: "pointer", position: "relative", overflow: "hidden" }}
+        >
+          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${progress}%`, background: "#f5ede0", borderRadius: "2px", transition: "width 0.3s linear" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px" }}>
+          <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(currentTime)}</span>
+          <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", color: "rgba(245,237,224,0.4)" }}>{fmt(duration)}</span>
+        </div>
       </div>
+
+      {/* Пульсирующие точки когда играет */}
+      {playing && (
+        <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "10px" }}>
+          {[0, 0.2, 0.4].map(d => (
+            <div key={d} style={{ width: "4px", height: "4px", borderRadius: "50%", background: "rgba(245,237,224,0.5)", animation: `pulse 1.2s ease-in-out ${d}s infinite` }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -165,13 +194,13 @@ export default function Index() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Montserrat:wght@300;400;500&display=swap');
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.5; } 50% { transform: scale(1.6); opacity: 1; } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #6b1429 !important; }
       `}</style>
 
       <main style={{ minHeight: "100vh", background: "#6b1429", maxWidth: "500px", margin: "0 auto" }}>
 
-        {/* MUSIC */}
         <MusicBar />
 
         {/* HERO */}
@@ -187,7 +216,7 @@ export default function Index() {
           </p>
         </div>
 
-        {/* NAMES CARD */}
+        {/* NAMES */}
         <Card>
           <p style={{ fontFamily: "'Great Vibes', cursive", fontSize: "clamp(22px,6vw,30px)", color: "#6b1429", textAlign: "center", marginBottom: "4px", fontWeight: 400 }}>
             Мы женимся!
@@ -217,9 +246,7 @@ export default function Index() {
           <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(40px,10vw,54px)", color: "#6b1429", textAlign: "center", fontWeight: 300, letterSpacing: "0.05em" }}>
             22 / 07 / 26
           </p>
-
           <Divider />
-
           <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#9b7b85", textAlign: "center", marginBottom: "16px" }}>
             Обратный отсчёт
           </p>
@@ -232,9 +259,7 @@ export default function Index() {
             <span style={{ color: "rgba(107,20,41,0.25)", fontSize: "22px" }}>:</span>
             <CountdownBlock value={seconds} label="секунд" />
           </div>
-
           <Divider />
-
           <img src={CHERUB_IMG} alt="купидон" style={{ display: "block", width: "150px", margin: "0 auto 16px", borderRadius: "8px" }} />
           <p style={{ fontFamily: "'Cormorant Garamond', serif", fontStyle: "italic", color: "#9b7b85", fontSize: "15px", textAlign: "center", lineHeight: 1.75 }}>
             Мы так счастливы пригласить вас разделить с нами радость нашей любви…
@@ -250,15 +275,11 @@ export default function Index() {
               <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "18px", color: "#3d0a17", fontWeight: 600, margin: "0 0 4px" }}>
                 г/к «Аврора», 1 этаж
               </p>
-              <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85", marginBottom: "16px" }}>
+              <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85", marginBottom: "0" }}>
                 ул. Поворотникова, д. 6
               </p>
             </div>
-            <img
-              src={AURORA_IMG}
-              alt="Аврора Комплекс"
-              style={{ width: "100%", display: "block", height: "200px", objectFit: "cover" }}
-            />
+            <img src={AURORA_IMG} alt="Аврора Комплекс" style={{ width: "100%", display: "block", height: "210px", objectFit: "cover" }} />
             <div style={{ padding: "14px", textAlign: "center", fontSize: "22px" }}>🌺🌸🌺</div>
           </div>
         </Card>
@@ -280,9 +301,7 @@ export default function Index() {
                 <p style={{ fontFamily: "'Great Vibes', cursive", fontSize: "22px", color: "#3d0a17", margin: "4px 0 2px", fontWeight: 400 }}>
                   {item.title}
                 </p>
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85" }}>
-                  {item.sub}
-                </p>
+                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#9b7b85" }}>{item.sub}</p>
               </div>
               {i < arr.length - 1 && <Divider />}
             </div>
@@ -314,7 +333,7 @@ export default function Index() {
           {submitted ? (
             <div style={{ textAlign: "center", padding: "20px 0" }}>
               <div style={{ fontSize: "48px", marginBottom: "16px" }}>💌</div>
-              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "20px", color: "#6b1429" }}>
+              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "20px", color: "#6b1429", lineHeight: 1.5 }}>
                 {attending === "yes" ? "Спасибо! Мы вас ждём 🤍" : "Жаль, что не сможете. Будем скучать 🌸"}
               </p>
             </div>
@@ -335,25 +354,12 @@ export default function Index() {
                   { value: "no", label: "К сожалению, не смогу" },
                 ].map(opt => (
                   <label key={opt.value} style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
-                    <input
-                      type="radio"
-                      name="attending"
-                      value={opt.value}
-                      checked={attending === opt.value}
-                      onChange={() => setAttending(opt.value as "yes" | "no")}
-                      style={{ accentColor: "#6b1429", width: "18px", height: "18px" }}
-                    />
-                    <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "13px", color: "#3d0a17" }}>
-                      {opt.label}
-                    </span>
+                    <input type="radio" name="attending" value={opt.value} checked={attending === opt.value} onChange={() => setAttending(opt.value as "yes" | "no")} style={{ accentColor: "#6b1429", width: "18px", height: "18px" }} />
+                    <span style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "13px", color: "#3d0a17" }}>{opt.label}</span>
                   </label>
                 ))}
               </div>
-              {error && (
-                <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#c0392b", textAlign: "center" }}>
-                  {error}
-                </p>
-              )}
+              {error && <p style={{ fontFamily: "'Montserrat', sans-serif", fontSize: "12px", color: "#c0392b", textAlign: "center" }}>{error}</p>}
               <button
                 onClick={submitGuest}
                 disabled={!guestName.trim() || !attending || loading}
